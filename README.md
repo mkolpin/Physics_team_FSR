@@ -13,5 +13,5 @@ git add <filename>
 git commit -m '<commit message>'
 #commits changes to your _local_ development branch
 
-git push
+git push origin master
 #pushes your local branch onto the master branch
