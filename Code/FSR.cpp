@@ -4,7 +4,9 @@
 #include <algorithm>    // std::min
 #include "TGraph.h"
 #include "TCanvas.h"
-
+#include "TPad.h"
+#include "TF1.h"
+#include "TLegend.h"
 //-------------------------------------------------
 // Particle
 //-------------------------------------------------
@@ -21,8 +23,14 @@ Particle::Particle(ParticleType type, double t, double x) :
 FSR::FSR(double t0): 
   m_rand(new TRandom3(3.1415))
   , m_t0(t0)
-  , m_alpha_s(1) //FIXME: Value
-  , m_precision(1e-5)
+  , m_alpha_s(1./137.) //FIXME: Value
+  , m_precision(1e-4)
+  , h_t_q(new TH1F("h_t_q","quarks;t;", 100,0,1))
+  , h_x_q(new TH1F("h_x_q","quarks;x;", 100,0,1))
+  , h_t_g(new TH1F("h_t_g","gluons;t;", 100,0,1))
+  , h_x_g(new TH1F("h_x_g","gluons;x;", 100,0,1))
+  , h_rnd(new TH1F("h_rnd","random numbers;r",100,0,1))
+  , h_radMode(new TH1F("h_radMode",";g->gg, g->qq, q->qg",3, -0.5,2.5))
 {  
   DEBUG_MSG("FSR(" << t0 << ")");
 }
@@ -36,7 +44,15 @@ void FSR::MakeJet(Particle p_in, vector< Particle > &jet)
 {
   DEBUG_MSG("FSR::MakeJet");
   m_debugchain.push_back(p_in);    
-  
+  if(p_in.GetType() == gluon){
+    h_t_g->Fill(p_in.GetT());
+    h_x_g->Fill(p_in.GetX());
+  }
+  else{
+    h_t_q->Fill(p_in.GetT());
+    h_x_q->Fill(p_in.GetX());
+  }
+
   if(! CanRadiate(p_in) ) // particle stable, add to final jet
     jet.push_back(p_in);
   else { // particle will continue radiating
@@ -66,43 +82,52 @@ bool FSR::Radiate(Particle p_in, Particle &p_out1, Particle &p_out2)
   double t_in = p_in.GetT();
   double x_in = p_in.GetX();
 
-  double r_x    = m_rand->Uniform(0,1); //TODO: what happens if r_x == 0? What does it mean physically?
-  
-  DEBUG_MSG("r_x " << r_x);
+  double r_x = m_rand->Uniform(0,1); //TODO: what happens if r_x == 0? What does it mean physically?
+  h_rnd->Fill(r_x);
 
   bool radiated = false;
   if( p_in.GetType() == gluon ){ // is a gluon
+    DEBUG_MSG("gluon");
     double r_t_gg = m_rand->Uniform(0,1);
     double r_t_qg = m_rand->Uniform(0,1);
-    DEBUG_MSG("r_t_gg " << r_t_gg << " r_t_qg " << r_t_qg);
-    if(r_t_gg < r_t_qg && r_t_gg != 0){ // radiate gluons before quarks
-      DEBUG_MSG("--> radiating 2 gluons");
-      t_out1 = GetTFromDelta_g(m_t0, Delta_g(m_t0, t_in) / r_t_gg);
-      x_out1 = GetXFromP_gg(0, x_in, IntP_gg(0,1) * r_x);
+    h_rnd->Fill(r_t_gg);
+    h_rnd->Fill(r_t_qg);
+ 
+    double t_out1_gg = GetTFromDelta_gg(t_in, r_t_gg);
+    double t_out1_qg = GetTFromDelta_qg(t_in, r_t_qg);
+ 
+    if(t_out1_gg < t_out1_qg){ // radiate gluons before quarks
+      DEBUG_MSG("\t--> radiating 2 gluons");
+      h_radMode->Fill(0);
+      t_out1 = t_out1_gg;
+      x_out1 = GetXFromP_gg(x_in, IntP_gg(0,1) * r_x);
       type_out1 = gluon;
       type_out2 = gluon;
       radiated = true;
     }
-    else if(r_t_qg != 0){ // radiate quarks before gluons
-      DEBUG_MSG("--> radiating 2 quarks");
-      t_out1 = GetTFromDelta_g(m_t0, Delta_g(m_t0, t_in) / r_t_qg);
-      x_out1 = GetXFromP_qg(0, x_in, IntP_qg(0,1) * r_x);
+    else{ // radiate quarks before gluons
+      DEBUG_MSG("\t--> radiating 2 quarks");
+      h_radMode->Fill(1);
+      t_out1 = t_out1_qg;
+      x_out1 = GetXFromP_qg(x_in, IntP_qg(0,1) * r_x);
       type_out1 = quark;
       type_out2 = quark;
       radiated = true;
     }
   }
   else if (p_in.GetType() == quark) { // is a quark
-    DEBUG_MSG("--> radiating quark and gluon");
+    DEBUG_MSG("quark");
+    DEBUG_MSG("\t--> radiating quark and gluon");
+    h_radMode->Fill(2);
     double r_t_qq = m_rand->Uniform(0,1);
-    DEBUG_MSG("r_t_qq " << r_t_qq);
-    if(r_t_qq != 0){
-      t_out1 = GetTFromDelta_q(m_t0, Delta_q(m_t0, t_in) / r_t_qq);
-      x_out1 = GetXFromP_qq(0, x_in, IntP_qq(0,1) * r_x);
-      type_out1 = quark;
-      type_out2 = gluon;
-      radiated = true;
-    }
+    h_rnd->Fill(r_t_qq);
+    DEBUG_MSG("r_t_qq " << r_t_qq << ", r_x " << r_x);
+    t_out1 = GetTFromDelta_qq(t_in, r_t_qq);
+    x_out1 = GetXFromP_qq(x_in, IntP_qq(0,1) * r_x);
+    type_out1 = quark;
+    type_out2 = gluon;
+    radiated = true;
+    DEBUG_MSG("t_out1 " << t_out1 << " x_out1 " << x_out1 );
   }
 
   if(radiated){
@@ -125,21 +150,35 @@ bool FSR::Radiate(Particle p_in, Particle &p_out1, Particle &p_out2)
   return radiated;
 }
 //-------------------------------------------------
-// Equation (2.166), page 157
-double FSR::Delta_g(double t0, double t1){
-  DEBUG_MSG("FSR::Delta_g");
+// Equation (2.166), page 157, g->gg part
+double FSR::Delta_gg(double t0, double t1){
+  DEBUG_MSG("FSR::Delta_gg");
   double intP_gg = IntP_gg(0,1);
-  double intP_qg = IntP_qg(0,1);
-  double arg = (intP_gg + intP_qg) * log(t1/t0);
-  return exp(-arg);
+  double retVal = TMath::Exp( -intP_gg * TMath::Log(t1/t0));
+
+  DEBUG_MSG("\t--> " << retVal);
+  return retVal;
 }
 //-------------------------------------------------
-// Equation (2.166), page 157
-double FSR::Delta_q(double t0, double t1)
+// Equation (2.166), page 157, g->qq part
+double FSR::Delta_qg(double t0, double t1){
+  DEBUG_MSG("FSR::Delta_qg");
+  double intP_qg = IntP_qg(0,1);
+  double retVal =  TMath::Exp(-intP_qg * TMath::Log(t1/t0));
+
+  DEBUG_MSG("\t--> "<< retVal);
+  return retVal;
+}
+//-------------------------------------------------
+// Equation (2.166), page 157, quark part
+double FSR::Delta_qq(double t0, double t1)
 {
-  DEBUG_MSG("FSR::Delta_q");
+  DEBUG_MSG("FSR::Delta_qq");
   double intP_qq = IntP_qq(0,1);
-  return exp( -intP_qq * log(t1/t0) );
+  double retVal = TMath::Exp( -intP_qq * TMath::Log(t1/t0) );
+
+  DEBUG_MSG("\t--> " << retVal);
+  return retVal;
 }
 //-------------------------------------------------
 // Equation (2.105), page 140
@@ -147,71 +186,73 @@ double FSR::P_gg(double z)
 {
   double C_A = 3; // FIXME: value
   // numerical cutoff:
-  //if(z<m_precision || z>1-m_precision)
-  if(z<0.1 || z>0.9)
-    return 0;
-  else
-    return C_A * ( z/(1-z) + (1-z)/z + z*(1-z) );
+  if(z<m_integrationCutoff)
+    z = m_integrationCutoff;
+  else if(z>1-m_integrationCutoff)
+    z = 1-m_integrationCutoff;
+
+  double retVal = C_A * ( z/(1-z) + (1-z)/z + z*(1-z) );
+  
+  return retVal;
 }
 //-------------------------------------------------
 // Equation (2.114), page 142
 double FSR::P_qg(double z)
 {
   double T_R = 1./2.; // FIXME: value
-  return T_R * ( z*z + (1-z)*(1-z) );
+  double retVal = T_R * ( z*z + (1-z)*(1-z) );
+
+  return retVal;
 }
 //-------------------------------------------------
 // Equation (2.118), page 143
 double FSR::P_qq(double z)
 {
-  double m_C_F = 4./3.; // FIXME: value
+  double C_F = 4./3.; // FIXME: value
   // numerical cutoff:
-  if(z > 1-m_precision)
-    return 0;
-  else
-    return m_C_F * (1+z*z) / (1-z);
+  if(z > 1.-m_integrationCutoff)
+    z = 1.-m_integrationCutoff;
+  double retVal = C_F * (1+z*z) / (1-z);
+
+  return retVal;
 }
 //-------------------------------------------------
-double FSR::IntP_gg(double x0, double x1)
+double FSR::Integrate(double (*func)(double), double z0, double z1)
+{
+  int n = (z1 - z0) / m_precision;
+  double z(0), integral(0);
+
+  z1 = z0+m_precision;
+  for(int i=0; i<n; i++){
+    integral += 0.5 * (m_precision) * ( (*func)(z0+m_precision) + (*func)(z0) );
+    z0+=m_precision;
+  }
+  return /*m_precision * */ integral;
+}
+
+double FSR::IntP_gg(double z0, double z1)
 {
   DEBUG_MSG("FSR::IntP_gg");
-  // FIXME: integration should definetly done in a smarte way.
-  // Ideally also code multiplication should be avoided in IngP_xx
-  int n = (x1 - x0) / m_precision;
-  double x(0), integral(0);
-  for(int i=0; i<n; i++){
-    x = x0 + i*m_precision;
-    integral += P_gg(x);
-  }
-  return m_alpha_s / TMath::TwoPi() * m_precision * integral;
+  double retVal = m_alpha_s / TMath::TwoPi() * Integrate(&P_gg, z0, z1);
+  DEBUG_MSG("\t--> " << retVal);
+  return retVal;
 }
 //-------------------------------------------------
-double FSR::IntP_qg(double x0, double x1)
+double FSR::IntP_qg(double z0, double z1)
 {
   DEBUG_MSG("FSR::IntP_qg");
-  // FIXME: integration should definetly done in a smarte way.
-  // Ideally also code multiplication should be avoided in IngP_xx
-  int n = (x1 - x0) / m_precision;
-  double x(0), integral(0);
-  for(int i=0; i<n; i++){
-    x = x0 + i*m_precision;
-    integral += P_qg(x);
-  }
-  return m_alpha_s / TMath::TwoPi() *  m_precision * integral;
+  double retVal = m_alpha_s / TMath::TwoPi() * Integrate(&P_qg, z0, z1);
+  DEBUG_MSG("\t--> " << retVal);
+  return retVal;
 }
 //-------------------------------------------------
-double FSR::IntP_qq(double x0, double x1)
+double FSR::IntP_qq(double z0, double z1)
 {
   DEBUG_MSG("FSR::IntP_qq");
-  // FIXME: integration should definetly done in a smarte way.
-  // Ideally also code multiplication should be avoided in IngP_xx
-  int n = (x1 - x0) / m_precision;
-  double x(0), integral(0);
-  for(int i=0; i<n; i++){
-    x = x0 + i*m_precision;
-    integral += P_qq(x);
-  }
-  return m_alpha_s / TMath::TwoPi() * m_precision * integral;
+  double retVal = m_alpha_s / TMath::TwoPi() * Integrate(&P_qq, z0, z1);
+  DEBUG_MSG("\t--> " << retVal);
+
+  return retVal;
 }
 //-------------------------------------------------
 bool FSR::CanRadiate(Particle p)
@@ -224,93 +265,105 @@ bool FSR::CanRadiate(Particle p)
 }
 //-------------------------------------------------
 // Equation (2.174), page 159
-double FSR::GetTFromDelta_g(double t_low, double c)
+double FSR::GetTFromDelta_gg(double t_in, double c)
 {
-  DEBUG_MSG("FSR::GetTFromDelta_g");
+  DEBUG_MSG("FSR::GetTFromDelta_gg");
   double intP_gg = IntP_gg(0,1);
-  double intP_qg = IntP_qg(0,1);
+  double t_out(t_in);
+  double arg = intP_gg * TMath::Log(t_in/t_out);
 
-  DEBUG_MSG(intP_gg << " " << intP_qg);
-
-  double arg(0);
-  double t0(t_low), t1(t_low);
-
-  // integrate while varying upper boundary until exp(-arg) == c;
-  while(exp(-arg) > c){ // FIXME: > or < ?
-    arg = (intP_gg + intP_qg) * log(t1/t_low);
-    t0 = t1;
-    t1 += m_precision;
+  while(TMath::Exp(-arg) > c){
+    arg = intP_gg * TMath::Log(t_in/t_out);
+    t_out -= m_precision;
   }
-
-  return (t0 + t1)/2.;
+  DEBUG_MSG("\t--> " << t_out );
+  return t_out;
 }
 //-------------------------------------------------
 // Equation (2.174), page 159
-double FSR::GetTFromDelta_q(double t_low, double c){
+double FSR::GetTFromDelta_qg(double t_in, double c)
+{
+  DEBUG_MSG("FSR::GetTFromDelta_qg");
+  double intP_qg = IntP_qg(0,1);
+  double t_out(t_in);
+  double arg = intP_qg * TMath::Log(t_in/t_out);
+
+
+  while(TMath::Exp(-arg) > c && t_out >= m_t0){
+    arg = intP_qg * TMath::Log(t_in/t_out);
+    t_out -= m_precision;
+  }
+  DEBUG_MSG("\t--> " << t_out );
+  return t_out;
+}
+//-------------------------------------------------
+// Equation (2.174), page 159
+double FSR::GetTFromDelta_qq(double t_in, double c){
+  DEBUG_MSG("FSR::GetTFromDelta_qq");
   double intP_qq = IntP_qq(0,1);
+  double t_out(t_in);
+  double arg = intP_qq * TMath::Log(t_in/t_out);
 
-  double arg(0);
-  double t0(t_low), t1(t_low);
-
-  // integrate while varying upper boundary until exp(-arg) == c;
-  while(exp(-arg) > c){ // FIXME: > or < ?
-    arg = intP_qq * log(t1/t_low);
-    t0 = t1;
-    t1 += m_precision;
+  while(TMath::Exp(-arg) > c && t_out >= m_t0){
+    arg = intP_qq * TMath::Log(t_in/t_out);
+    t_out -= m_precision;
   }
-  return (t0 + t1)/2.;
+  DEBUG_MSG("\t--> " << t_out );
+  return t_out;
 }
 //-------------------------------------------------
 // Equation (2.175), page 159
-double FSR::GetXFromP_gg(double x0, double x1, double c)
+double FSR::GetXFromP_gg(double x1, double c)
 {
-  DEBUG_MSG( "FSR::GetXFromR_gg" );
+  DEBUG_MSG( "FSR::GetXFromP_gg" );
   double integral(0);
-  double x(x0);
-  c = c/m_precision;
+  double z0(0);
+  double z1 = z0+m_precision;
   while(integral < c){
-    integral += P_gg(x);
-    x0 = x;
-    x += m_precision;
+    integral += Integrate(&P_gg, z0, z0+m_precision);
+    z0 += m_precision;
   }
   // upper integration bound is something x0 == x2/x1
-  return x0 * x1;
+  double x_out = (2*z0+m_precision)/2. * x1;
+  DEBUG_MSG("\t-->"<<x_out);
+  return x_out;
 }
 //-------------------------------------------------
 // Equation (2.175), page 159
-double FSR::GetXFromP_qg(double x0, double x1, double c) 
+double FSR::GetXFromP_qg(double x1, double c) 
 {
-  DEBUG_MSG( "FSR::GetXFromR_qg" );
+  DEBUG_MSG( "FSR::GetXFromP_qg" );
   double integral(0);
-  double x(x0);
-  c = c/m_precision;
+  double z0(0);
   while(integral < c){ 
-    integral += P_qg(x);
-    x0 = x;
-    x += m_precision;
+    integral += Integrate(&P_qg, z0, z0+m_precision);
+    z0 += m_precision;
   }
   // upper integration bound is something x0 == x2/x1
-  return x0 * x1;
+  double x_out = (2*z0+m_precision)/2. * x1;
+  DEBUG_MSG("\t-->"<<x_out);
+  return x_out;
 }
 //-------------------------------------------------
 // Equation (2.175), page 159
-double FSR::GetXFromP_qq(double x0, double x1, double c) 
+double FSR::GetXFromP_qq(double x1, double c) 
 {
-  DEBUG_MSG( "FSR::GetXFromR_qg" );
+  DEBUG_MSG( "FSR::GetXFromP_qq" );
   double integral(0);
-  double x(x0);
-  c = c/m_precision;
-  while(integral < c){
-    integral += P_qq(x);
-    x0 = x;
-    x += m_precision;
-  }
+  double z0(0);
+    while(integral < c){ 
+      integral += Integrate(&P_qq, z0, z0 + m_precision);
+      z0 += m_precision;
+    }
   // upper integration bound is something x0 == x2/x1
-  return x0 * x1;
+  double x_out = (2*z0+m_precision)/2. * x1;
+  DEBUG_MSG("\t-->"<<x_out);
+  return x_out;
 }
 //-------------------------------------------------
 void FSR::DrawTXPlot(char* pdf){
   TCanvas c("c");
+  c.Divide(2,2);
   vector< double > t;
   vector< double > x;
   int n = min((int)m_debugchain.size(),100);
@@ -323,7 +376,22 @@ void FSR::DrawTXPlot(char* pdf){
     g.SetTitle("Initial quark");
   if(m_debugchain[0].GetType() == gluon)
     g.SetTitle("Initial gluon");
+  c.cd(1);
   g.Draw("A*L");
   m_debugchain.clear();
+  
+  c.cd(2);
+  h_radMode->Draw();
+
+  c.cd(3);
+  h_t_q->Draw();
+  h_t_g->SetLineColor(2);
+  h_t_g->Draw("same");
+  gPad->BuildLegend()->Draw();
+  c.cd(4);
+  h_x_q->Draw();
+  h_x_g->SetLineColor(2);
+  h_x_g->Draw("same");
   c.Print(pdf);
+
 }

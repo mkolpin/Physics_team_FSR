@@ -27,6 +27,7 @@
 #include "vector"
 #include "TRandom3.h"
 #include "TLorentzVector.h"
+#include "TH1.h"
 
 using namespace std;
 
@@ -82,30 +83,44 @@ class FSR{
     bool CanRadiate(Particle p);
     bool Radiate(Particle p_in, Particle &p_out1, Particle &p_out2);
 
-    double Delta_g(double t0, double t1);
-    double Delta_q(double t0, double t1);
+    double Delta_gg(double t0, double t1);
+    double Delta_qg(double t0, double t1);
+    double Delta_qq(double t0, double t1);
 
-    double GetTFromDelta_g(double t_low, double c);
-    double GetTFromDelta_q(double t_low, double c);
+    double GetTFromDelta_gg(double t_low, double c);
+    double GetTFromDelta_qg(double t_low, double c);
+    double GetTFromDelta_qq(double t_low, double c);
 
-    double P_gg(double z);
-    double P_qg(double z);
-    double P_qq(double z);
 
-    double IntP_gg(double x0, double x1);
-    double IntP_qg(double x0, double x1);
-    double IntP_qq(double x0, double x1);
+    static double P_gg(double z);
+    static double P_qg(double z);
+    static double P_qq(double z); // static, so that can be used in Integrate();
 
-    double GetXFromP_gg(double x0, double x1, double c);
-    double GetXFromP_qg(double x0, double x1, double c);
-    double GetXFromP_qq(double x0, double x1, double c);
+    double IntP_gg(double z0, double z1);
+    double IntP_qg(double z0, double z1);
+    double IntP_qq(double z0, double z1);
+
+    double GetXFromP_gg(double x1, double c);
+    double GetXFromP_qg(double x1, double c);
+    double GetXFromP_qq(double x1, double c);
+
+    double Integrate(double (*func)(double), double z0, double z1);
 
     TRandom3* m_rand;
 
     double m_t0;                    // Lower t0 bound, whats a good value, which units do we use (GeV?)
     double m_alpha_s;               // TODO: how to treat alpha_s, at first set constant?, to which value?;
     double m_precision;             // precision of integrations etc. so far integrations are extremely primitive.
+    static constexpr double m_integrationCutoff = 0.001; // static to be accessible by static member functions
     std::vector< Particle > m_debugchain;
+
+
+    TH1F* h_t_q;
+    TH1F* h_x_q;
+    TH1F* h_t_g;
+    TH1F* h_x_g;
+    TH1F* h_rnd;
+    TH1F* h_radMode;
 
 };
 
