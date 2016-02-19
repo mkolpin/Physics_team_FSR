@@ -24,7 +24,7 @@ FSR::FSR(double t0):
   m_rand(new TRandom3(3.1415))
   , m_t0(t0)
   , m_alpha_s(1./137.) //FIXME: Value
-  , m_precision(1e-4)
+  , m_precision(1e-5)
   , h_t_q(new TH1F("h_t_q","quarks;t;", 100,0,1))
   , h_x_q(new TH1F("h_x_q","quarks;x;", 100,0,1))
   , h_t_g(new TH1F("h_t_g","gluons;t;", 100,0,1))
@@ -53,22 +53,18 @@ void FSR::MakeJet(Particle p_in, vector< Particle > &jet)
     h_x_q->Fill(p_in.GetX());
   }
 
-  if(! CanRadiate(p_in) ) // particle stable, add to final jet
-    jet.push_back(p_in);
-  else { // particle will continue radiating
-    Particle p_out1, p_out2;
-    if(Radiate(p_in, p_out1, p_out2)){
-      DEBUG_MSG("; Particle (type, t, x) = (" 
-          << p_in.GetType() << ", " << p_in.GetT() << ", " << p_in.GetX() << ") --> radiated --> ("
-          << p_out1.GetType() << ", " << p_out1.GetT() << ", " << p_out1.GetX() << ") and ("
-          << p_out2.GetType() << ", " << p_out2.GetT() << ", " << p_out2.GetX() << ")");
+  Particle p_out1, p_out2;
+  if(Radiate(p_in, p_out1, p_out2)){
+    DEBUG_MSG("; Particle (type, t, x) = (" 
+        << p_in.GetType() << ", " << p_in.GetT() << ", " << p_in.GetX() << ") --> radiated --> ("
+        << p_out1.GetType() << ", " << p_out1.GetT() << ", " << p_out1.GetX() << ") and ("
+        << p_out2.GetType() << ", " << p_out2.GetT() << ", " << p_out2.GetX() << ")");
 
-      MakeJet(p_out1, jet); // call MakeJet recoursively for daughter particles
-      MakeJet(p_out2, jet);
-    }
-    else
-      cout << "WARNING: Something went wrong p_in didn't radiate while it should have.\n";
+    MakeJet(p_out1, jet); // call MakeJet recoursively for daughter particles
+    //MakeJet(p_out2, jet);
   }
+  else
+    jet.push_back(p_in);
   return;
 }
 //-------------------------------------------------
@@ -76,7 +72,7 @@ bool FSR::Radiate(Particle p_in, Particle &p_out1, Particle &p_out2)
 {
   DEBUG_MSG("FSR::Radiate");
 
-  double t_out1(0), x_out1(0);
+  double t_out1(0), x_out1(0), t_out2(0), x_out2(0);
   ParticleType type_out1(undefined), type_out2(undefined);
 
   double t_in = p_in.GetT();
@@ -96,15 +92,14 @@ bool FSR::Radiate(Particle p_in, Particle &p_out1, Particle &p_out2)
     double t_out1_gg = GetTFromDelta_gg(t_in, r_t_gg);
     double t_out1_qg = GetTFromDelta_qg(t_in, r_t_qg);
  
-    if(t_out1_gg < t_out1_qg){ // radiate gluons before quarks
+//    if(t_out1_gg < t_out1_qg){ // radiate gluons before quarks
       DEBUG_MSG("\t--> radiating 2 gluons");
       h_radMode->Fill(0);
       t_out1 = t_out1_gg;
       x_out1 = GetXFromP_gg(x_in, IntP_gg(0,1) * r_x);
       type_out1 = gluon;
       type_out2 = gluon;
-      radiated = true;
-    }
+/*    }
     else{ // radiate quarks before gluons
       DEBUG_MSG("\t--> radiating 2 quarks");
       h_radMode->Fill(1);
@@ -112,30 +107,40 @@ bool FSR::Radiate(Particle p_in, Particle &p_out1, Particle &p_out2)
       x_out1 = GetXFromP_qg(x_in, IntP_qg(0,1) * r_x);
       type_out1 = quark;
       type_out2 = quark;
-      radiated = true;
-    }
+    }*/
   }
   else if (p_in.GetType() == quark) { // is a quark
     DEBUG_MSG("quark");
     DEBUG_MSG("\t--> radiating quark and gluon");
     h_radMode->Fill(2);
+    
     double r_t_qq = m_rand->Uniform(0,1);
+    
     h_rnd->Fill(r_t_qq);
     DEBUG_MSG("r_t_qq " << r_t_qq << ", r_x " << r_x);
+    
     t_out1 = GetTFromDelta_qq(t_in, r_t_qq);
+    
+    
     x_out1 = GetXFromP_qq(x_in, IntP_qq(0,1) * r_x);
     type_out1 = quark;
     type_out2 = gluon;
-    radiated = true;
+
     DEBUG_MSG("t_out1 " << t_out1 << " x_out1 " << x_out1 );
   }
+
+  t_out2 = TMath::Sqrt(t_in*t_in - t_out1 *t_out1);
+  x_out2 = x_in - x_out1;
+
+  if(t_out1 > m_t0 && t_out2 > m_t0 && x_out1 > m_precision && x_out2 > m_precision)
+    radiated = true;
 
   if(radiated){
     p_out1.SetT(t_out1);
     p_out1.SetX(x_out1);
     p_out1.SetType(type_out1);
-    p_out2.SetT(t_in-t_out1); // FIXME: check this
-    p_out2.SetX(x_in-x_out1); // FIXME: check this
+    p_out2.SetT(t_out2);
+    p_out2.SetX(x_out2); // FIXME: check this
     p_out2.SetType(type_out2);
 
     if(t_out1 > t_in || t_out1 < 0){
@@ -210,7 +215,7 @@ double FSR::P_qq(double z)
 {
   double C_F = 4./3.; // FIXME: value
   // numerical cutoff:
-  if(z > 1.-m_integrationCutoff)
+  if(z > (1.-m_integrationCutoff))
     z = 1.-m_integrationCutoff;
   double retVal = C_F * (1+z*z) / (1-z);
 
@@ -304,8 +309,14 @@ double FSR::GetTFromDelta_qq(double t_in, double c){
   double t_out(t_in);
   double arg = intP_qq * TMath::Log(t_in/t_out);
 
+  intP_qq = 10;
+
   while(TMath::Exp(-arg) > c && t_out >= m_t0){
+   
+    
     arg = intP_qq * TMath::Log(t_in/t_out);
+    
+    
     t_out -= m_precision;
   }
   DEBUG_MSG("\t--> " << t_out );
@@ -377,7 +388,7 @@ void FSR::DrawTXPlot(char* pdf){
   if(m_debugchain[0].GetType() == gluon)
     g.SetTitle("Initial gluon");
   c.cd(1);
-  g.Draw("A*L");
+  g.Draw("A*");
   m_debugchain.clear();
   
   c.cd(2);

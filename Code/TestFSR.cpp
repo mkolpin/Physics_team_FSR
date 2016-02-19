@@ -19,7 +19,7 @@ int main()
   test.MakeJet(p_quark, jet_out);
   test.DrawTXPlot("TestFSR.pdf(");
   jet_out.clear();
-  test.MakeJet(p_gluon, jet_out);
+  test.MakeJet(p_quark, jet_out);
   test.DrawTXPlot("TestFSR.pdf)");
 
 

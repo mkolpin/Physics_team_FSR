@@ -91,7 +91,6 @@ class FSR{
     double GetTFromDelta_qg(double t_low, double c);
     double GetTFromDelta_qq(double t_low, double c);
 
-
     static double P_gg(double z);
     static double P_qg(double z);
     static double P_qq(double z); // static, so that can be used in Integrate();
@@ -111,7 +110,7 @@ class FSR{
     double m_t0;                    // Lower t0 bound, whats a good value, which units do we use (GeV?)
     double m_alpha_s;               // TODO: how to treat alpha_s, at first set constant?, to which value?;
     double m_precision;             // precision of integrations etc. so far integrations are extremely primitive.
-    static constexpr double m_integrationCutoff = 0.001; // static to be accessible by static member functions
+    static constexpr double m_integrationCutoff = 0.0001; // static to be accessible by static member functions
     std::vector< Particle > m_debugchain;
 
 
