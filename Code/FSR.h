@@ -28,6 +28,7 @@
 #include "TRandom3.h"
 #include "TLorentzVector.h"
 #include "TH1.h"
+#include "TGraph.h"
 
 using namespace std;
 
@@ -77,6 +78,7 @@ class FSR{
     void MakeJet(Particle p_in, vector< Particle >& jet);
 
     void DrawTXPlot(char* pdf);
+    void DebugPlots(char* pdf);
 
   private:
     // check whether a particle can still radiate (eg t>t0
@@ -86,7 +88,7 @@ class FSR{
     double Delta_gg(double t0, double t1);
     double Delta_qg(double t0, double t1);
     double Delta_qq(double t0, double t1);
-
+ 
     double GetTFromDelta_gg(double t_low, double c);
     double GetTFromDelta_qg(double t_low, double c);
     double GetTFromDelta_qq(double t_low, double c);
@@ -105,12 +107,13 @@ class FSR{
 
     double Integrate(double (*func)(double), double z0, double z1);
 
+
     TRandom3* m_rand;
 
     double m_t0;                    // Lower t0 bound, whats a good value, which units do we use (GeV?)
     double m_alpha_s;               // TODO: how to treat alpha_s, at first set constant?, to which value?;
     double m_precision;             // precision of integrations etc. so far integrations are extremely primitive.
-    static constexpr double m_integrationCutoff = 0.0001; // static to be accessible by static member functions
+    static constexpr double m_integrationCutoff = 1e-2; // static to be accessible by static member functions
     std::vector< Particle > m_debugchain;
 
 
@@ -120,7 +123,7 @@ class FSR{
     TH1F* h_x_g;
     TH1F* h_rnd;
     TH1F* h_radMode;
-
+   
 };
 
 #endif
