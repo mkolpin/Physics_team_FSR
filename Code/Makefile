@@ -1,7 +1,7 @@
 #!/bin/bash
-CC=g++
+CC=g++ 
 
-CFLAGS=-c -g -Wall -fPIC $(shell root-config --cflags)
+CFLAGS=-c -g -Wall -fPIC $(shell root-config --cflags) -std=c++11
 LDFLAGS=$(shell root-config --glibs)
 SOURCES=TestFSR.cpp FSR.cpp
 OBJECTS=$(SOURCES:.cpp=.o)
