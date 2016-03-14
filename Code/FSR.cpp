@@ -7,6 +7,11 @@
 #include "TPad.h"
 #include "TF1.h"
 #include "TLegend.h"
+#include "TFile.h"
+#include "TTree.h"
+#include <iostream>
+#include <sstream>
+#include <fstream>
 //-------------------------------------------------
 // Particle
 //-------------------------------------------------
@@ -405,4 +410,87 @@ void FSR::DrawTXPlot(char* pdf){
   h_x_g->Draw("same");
   c.Print(pdf);
 
+}
+
+// Load and save events //
+
+void FSR::save_events(std::string filename, const std::vector<event>& events)
+{
+  TFile* output = new TFile(filename.c_str(), "RECREATE");
+  output->cd();
+  TTree* tree = new TTree("Events", "Events");
+  event meas;  
+  tree->Branch("weight",&meas.weight,"weight/D");
+  tree->Branch("part","std::vector<Particle>",&meas.part);
+  for (unsigned int i=0; i< events.size(); i++)
+    {
+      meas = events.at(i);
+      tree->Fill();
+    }
+  tree->Write();
+  output->Write();
+  output->Close();
+  delete output;
+}
+
+
+std::vector<event> FSR::load_events(std::string filename, int neventsmax)
+{
+  ifstream input;
+  input.open(filename.c_str());
+  std::cout << "Reading input file: " << filename << std::endl;
+  event meas;  
+  std::vector<event> result;
+  
+  string line;
+  int n_events = 0;
+  //Read in events from text file
+  if (input.is_open() ){
+      //loop over all lines
+      while ( getline (input,line) ){
+
+          //check number of read events (=lines) and break if requested maximum reached
+          n_events++;
+          if (n_events > neventsmax) break;
+
+          DEBUG_MSG("Line read in:" << line);
+
+          //set number of gluons/quarks (0/2 per default)
+          meas.nGluons = 0;
+          meas.nQuarks = 2;
+
+          std::vector<double> v;
+          std::string s;
+          istringstream linestream;
+          linestream.str( line );
+          //decompose line string into required properties and push into double vector
+          while (getline (linestream, s, ' ')){
+              v.push_back((double)atof(s.c_str()));
+          }
+
+          //finally, take vector and fill event properties (super hardcoded, thanks Johann et al.)
+          //event weight
+          DEBUG_MSG("Event" << n_events << ": weight=" << v.at(0) );
+          meas.weight = v.at(0);
+          //first quark
+          double x1 = TMath::Sqrt( v.at(2)*v.at(2) + v.at(3)*v.at(3) + v.at(4)*v.at(4) );
+          double t1 = TMath::Sqrt( v.at(2)*v.at(2) + v.at(3)*v.at(3) ) / x1; //FIXME: using PT/P, correct?
+          double E1 = v.at(1);
+          Particle quark1 = Particle(quark, t1, x1);
+          meas.part.push_back(quark1);
+          //second quark
+          double x2 = TMath::Sqrt( v.at(6)*v.at(6) + v.at(7)*v.at(7) + v.at(8)*v.at(8) );
+          double t2 = TMath::Sqrt( v.at(6)*v.at(6) + v.at(7)*v.at(7) ) / x2; //FIXME: using PT/P, correct?
+          double E2 = v.at(5);
+          Particle quark2 = Particle(quark, t2, x2);
+          meas.part.push_back(quark2);
+
+          result.push_back(meas);
+
+      }
+
+  }
+  input.close();
+
+  return result;
 }

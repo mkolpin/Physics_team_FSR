@@ -64,6 +64,18 @@ class Particle{
     double m_x;
 };
 
+///The event class stores the different event quantities.
+class event {
+public: 
+  ///the number of gluons and quarks
+  int nQuarks;
+  int nGluons;
+  ///the particles 
+  std::vector<Particle> part;
+  ///the event weight, needs to be forwarded to 'detector crew'
+  double weight;
+};
+
 
 // final state radiation test class
 class FSR{
@@ -77,6 +89,11 @@ class FSR{
     void MakeJet(Particle p_in, vector< Particle >& jet);
 
     void DrawTXPlot(char* pdf);
+
+    ///save event to file 
+    void save_events(std::string filename, const std::vector<event>& events);
+    ///load events from file into vector 
+    std::vector<event> load_events(std::string filename, int neventsmax = -1);
 
   private:
     // check whether a particle can still radiate (eg t>t0
