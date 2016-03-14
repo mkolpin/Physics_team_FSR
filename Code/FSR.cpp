@@ -422,17 +422,19 @@ void FSR::save_events(std::string filename, const std::vector<event>& events)
   TTree* tree = new TTree("Events", "Events");
   event meas;  
   tree->Branch("weight",&meas.weight,"weight/D");
-  std::vector<double> tmp[2];
+  std::vector<double> tmp[3];
   std::vector<int> tmpi[1];
   tree->Branch("type","std::vector<int>",&tmpi[0]);
   tree->Branch("x","std::vector<double>",&tmp[0]);
   tree->Branch("t","std::vector<double>",&tmp[1]);
+  tree->Branch("pt","std::vector<double>",&tmp[2]);
   for (auto i : events)
     {
       for (auto j : i.part){
         tmpi[0].push_back(j.GetType());
         tmp[0].push_back(j.GetX());
         tmp[1].push_back(j.GetT());
+        tmp[2].push_back(j.GetT()*j.GetX()*m_CME);
       }
       meas = i;
       tree->Fill();

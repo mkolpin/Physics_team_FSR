@@ -13,7 +13,7 @@ int main()
 
   // FSR Test
   FSR test(0.001);
-  vector<event> events = test.load_events("events.dat",10);
+  vector<event> events = test.load_events("events.dat",-1);
   vector<event> events_out;
   for (auto evt : events){
       vector<Particle> out_parts;
