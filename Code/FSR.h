@@ -127,6 +127,7 @@ class FSR{
     double m_t0;                    // Lower t0 bound, whats a good value, which units do we use (GeV?)
     double m_alpha_s;               // TODO: how to treat alpha_s, at first set constant?, to which value?;
     double m_precision;             // precision of integrations etc. so far integrations are extremely primitive.
+    double m_CME;                     // CMS energy used by matrix group, to normalise x
     static constexpr double m_integrationCutoff = 0.0001; // static to be accessible by static member functions
     std::vector< Particle > m_debugchain;
 

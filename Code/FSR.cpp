@@ -30,6 +30,7 @@ FSR::FSR(double t0):
   , m_t0(t0)
   , m_alpha_s(1./137.) //FIXME: Value
   , m_precision(1e-5)
+  , m_CME(6500.)
   , h_t_q(new TH1F("h_t_q","quarks;t;", 100,0,1))
   , h_x_q(new TH1F("h_x_q","quarks;x;", 100,0,1))
   , h_t_g(new TH1F("h_t_g","gluons;t;", 100,0,1))
@@ -421,10 +422,19 @@ void FSR::save_events(std::string filename, const std::vector<event>& events)
   TTree* tree = new TTree("Events", "Events");
   event meas;  
   tree->Branch("weight",&meas.weight,"weight/D");
-  tree->Branch("part","std::vector<Particle>",&meas.part);
-  for (unsigned int i=0; i< events.size(); i++)
+  std::vector<double> tmp[2];
+  std::vector<int> tmpi[1];
+  tree->Branch("type","std::vector<int>",&tmpi[0]);
+  tree->Branch("x","std::vector<double>",&tmp[0]);
+  tree->Branch("t","std::vector<double>",&tmp[1]);
+  for (auto i : events)
     {
-      meas = events.at(i);
+      for (auto j : i.part){
+        tmpi[0].push_back(j.GetType());
+        tmp[0].push_back(j.GetX());
+        tmp[1].push_back(j.GetT());
+      }
+      meas = i;
       tree->Fill();
     }
   tree->Write();
@@ -451,7 +461,7 @@ std::vector<event> FSR::load_events(std::string filename, int neventsmax)
 
           //check number of read events (=lines) and break if requested maximum reached
           n_events++;
-          if (n_events > neventsmax) break;
+          if (n_events > neventsmax && neventsmax > 0) break;
 
           DEBUG_MSG("Line read in:" << line);
 
@@ -476,12 +486,14 @@ std::vector<event> FSR::load_events(std::string filename, int neventsmax)
           double x1 = TMath::Sqrt( v.at(2)*v.at(2) + v.at(3)*v.at(3) + v.at(4)*v.at(4) );
           double t1 = TMath::Sqrt( v.at(2)*v.at(2) + v.at(3)*v.at(3) ) / x1; //FIXME: using PT/P, correct?
           double E1 = v.at(1);
+          x1 /= m_CME;
           Particle quark1 = Particle(quark, t1, x1);
           meas.part.push_back(quark1);
           //second quark
           double x2 = TMath::Sqrt( v.at(6)*v.at(6) + v.at(7)*v.at(7) + v.at(8)*v.at(8) );
           double t2 = TMath::Sqrt( v.at(6)*v.at(6) + v.at(7)*v.at(7) ) / x2; //FIXME: using PT/P, correct?
           double E2 = v.at(5);
+          x2 /= m_CME;
           Particle quark2 = Particle(quark, t2, x2);
           meas.part.push_back(quark2);
 
