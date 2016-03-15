@@ -66,6 +66,18 @@ class Particle{
     double m_x;
 };
 
+///The event class stores the different event quantities.
+class event {
+public: 
+  ///the number of gluons and quarks
+  int nQuarks;
+  int nGluons;
+  ///the particles 
+  std::vector<Particle> part;
+  ///the event weight, needs to be forwarded to 'detector crew'
+  double weight;
+};
+
 
 // final state radiation test class
 class FSR{
@@ -80,6 +92,10 @@ class FSR{
 
     void DrawTXPlot(char* pdf);
     void DebugPlots(char* pdf, double t_in=100);
+    ///save event to file 
+    void save_events(std::string filename, const std::vector<event>& events);
+    ///load events from file into vector 
+    std::vector<event> load_events(std::string filename, int neventsmax = -1);
 
   private:
     // check whether a particle can still radiate (eg t>t0
@@ -108,7 +124,6 @@ class FSR{
 
     double Integrate(double (*func)(double), double z0, double z1);
 
-
     TRandom3* m_rand;
 
     std::vector< Particle > m_debugchain;
@@ -126,6 +141,7 @@ class FSR{
     TH2F* h_tIn_deltaT;
 
     double m_t0;                                        // Lower t0 bound, whats a good value, which units do we use (GeV?)
+    double m_CME;                     // CMS energy used by matrix group, to normalise x 
     static constexpr double m_alpha_s = 1./137.;        // TODO: how to treat alpha_s, at first set constant?, to which value?;
     static constexpr double m_precision = 1e-2;         // precision of integrations etc. so far integrations are extremely primitive.
     static constexpr double m_integrationCutoff = 1e-3; // static to be accessible by static member functions
