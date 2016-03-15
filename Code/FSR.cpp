@@ -23,16 +23,18 @@ Particle::Particle(ParticleType type, double t, double x) :
 FSR::FSR(double t0): 
   m_rand(new TRandom3(3.1415))
   , m_t0(t0)
-  , m_alpha_s(1./137.) 
-  , m_precision(1e-5)
-  , h_t_q(new TH1F("h_t_q","quarks;t;", 100,0,1))
-  , h_x_q(new TH1F("h_x_q","quarks;x;", 100,0,1))
-  , h_t_g(new TH1F("h_t_g","gluons;t;", 100,0,1))
-  , h_x_g(new TH1F("h_x_g","gluons;x;", 100,0,1))
-  , h_rnd(new TH1F("h_rnd","random numbers;r",100,0,1))
-  , h_radMode(new TH1F("h_radMode",";g->gg, g->qq, q->qg",3, -0.5,2.5))
-{  
-  DEBUG_MSG("FSR(" << t0 << ")");
+ { 
+   DEBUG_MSG("FSR(" << t0 << ")");
+   h_t_q = new TH1F("h_t_q","quarks;t;", 100,0,plotTMax);
+   h_x_q = new TH1F("h_x_q","quarks;x;", 100,0,plotXMax);
+   h_t_g = new TH1F("h_t_g","gluons;t;", 100,0,plotTMax);
+   h_x_g = new TH1F("h_x_g","gluons;x;", 100,0,plotXMax);
+   h_rnd = new TH1F("h_rnd","random numbers;r",100,0,1.);
+   h_xIn_xOut = new TH2F("h_xIn_xOut",";x_in;x_out",100,0,plotXMax,100,0,plotXMax);
+   h_tIn_tOut = new TH2F("h_tIn_tOut",";t_in;t_out",100,0,plotTMax,100,0,plotTMax);
+   h_xIn_deltaX = new TH2F("h_xIn_deltaX",";x_in;x_in-x_out",100,0,plotXMax,100,0,plotXMax);
+   h_tIn_deltaT = new TH2F("h_tIn_deltaT",";t_in;t_in-t_out",100,0,plotTMax,100,0,plotTMax);
+   h_radMode = new TH1F("h_radMode",";g->gg, g->qq, q->qg",3, -0.5,2.5);
 }
 //-------------------------------------------------
 FSR::~FSR()
@@ -75,8 +77,21 @@ void FSR::MakeJet(Particle p_in, vector< Particle > &jet)
         << p_out1.GetType() << ", " << p_out1.GetT() << ", " << p_out1.GetX() << ") and ("
         << p_out2.GetType() << ", " << p_out2.GetT() << ", " << p_out2.GetX() << ")");
 
-    MakeJet(p_out1, jet); // call MakeJet recoursively for daughter particles
-    MakeJet(p_out2, jet);
+    h_xIn_xOut->Fill(p_in.GetX(), p_out1.GetX()); 
+    h_tIn_tOut->Fill(p_in.GetT(), p_out1.GetT());
+    h_xIn_deltaX->Fill(p_in.GetX(), p_in.GetX()-p_out1.GetX()); 
+    h_tIn_deltaT->Fill(p_in.GetT(), p_in.GetT()-p_out1.GetT());
+
+    if(p_in.GetX() == p_out1.GetX()) cout << "x_in == x_out == " << p_in.GetX() << endl;
+
+
+    MakeJet(p_out1, jet);   // call MakeJet recoursively for daughter particles
+
+    bool followGluons = false;
+    if(followGluons)
+      MakeJet(p_out2, jet);
+    else
+      jet.push_back(p_in);
   }
   else
     jet.push_back(p_in);
@@ -221,7 +236,7 @@ double FSR::P_gg(double z)
 double FSR::P_qg(double z)
 {
   double T_R = 1./2.; // FIXME: value
-  double retVal = T_R * ( z*z + (1-z)*(1-z) );
+  double retVal = T_R * ( z*z + (1.-z)*(1.-z) );
 
   return retVal;
 }
@@ -291,7 +306,7 @@ double FSR::GetTFromDelta_gg(double t_in, double c)
   double intP_gg = IntP_gg(0,1);
   double t_out(t_in);
   double arg = intP_gg * TMath::Log(t_in/t_out); 
-  while(TMath::Exp(-arg) > c){
+  while(TMath::Exp(-arg) > c && t_out >= m_precision){
     arg = intP_gg * TMath::Log(t_in/t_out);
     t_out -= m_precision;
   }
@@ -306,7 +321,7 @@ double FSR::GetTFromDelta_qg(double t_in, double c)
   double intP_qg = IntP_qg(0,1);
   double t_out(t_in);
   double arg = intP_qg * TMath::Log(t_in/t_out);
-  while(TMath::Exp(-arg) > c){
+  while(TMath::Exp(-arg) > c && t_out >= m_precision){
     arg = intP_qg * TMath::Log(t_in/t_out);
     t_out -=  m_precision;
   }
@@ -321,7 +336,7 @@ double FSR::GetTFromDelta_qq(double t_in, double c){
   double t_out(t_in);
   double arg = intP_qq * TMath::Log(t_in/t_out);
 
-  while(TMath::Exp(-arg) > c){
+  while(TMath::Exp(-arg) > c && t_out >= m_precision){
     arg = intP_qq * TMath::Log(t_in/t_out);
     t_out -= m_precision;
   }
@@ -382,7 +397,7 @@ double FSR::GetXFromP_qq(double x1, double c)
 //-------------------------------------------------
 void FSR::DrawTXPlot(char* pdf){
   TCanvas c("c");
-  c.Divide(2,2);
+  c.Divide(4,2);
   vector< double > t;
   vector< double > x;
   int n = min((int)m_debugchain.size(),100);
@@ -392,9 +407,9 @@ void FSR::DrawTXPlot(char* pdf){
   }
   TGraph g(n, &t[0], &x[0]);
   if(m_debugchain[0].GetType() == quark)
-    g.SetTitle("Initial quark");
+    g.SetTitle("Initial quark;t;x");
   if(m_debugchain[0].GetType() == gluon)
-    g.SetTitle("Initial gluon");
+    g.SetTitle("Initial gluon;t;x");
   c.cd(1);
   g.Draw("A*");
   m_debugchain.clear();
@@ -411,14 +426,36 @@ void FSR::DrawTXPlot(char* pdf){
   h_x_q->Draw();
   h_x_g->SetLineColor(2);
   h_x_g->Draw("same");
+
+  c.cd(5);
+  h_xIn_xOut->Draw("COLZ");
+  c.cd(6);
+  h_tIn_tOut->Draw("COLZ");
+  c.cd(7)->SetLogy();
+  h_xIn_deltaX->GetYaxis()->SetRangeUser(1e-9,1);
+  h_xIn_deltaX->Draw("COLZ");
+  c.cd(8)->SetLogy();
+  h_tIn_deltaT->Draw("COLZ");
   c.Print(pdf);
+
+
+  /*h_t_q->Reset();
+  h_x_q->Reset();
+  h_t_g->Reset();
+  h_x_g->Reset();
+  h_rnd->Reset();*/
+  h_radMode->Reset();
+
 
 }
 
 
-void FSR::DebugPlots(char* pdf)
+void FSR::DebugPlots(char* pdf, double t_in)
 {
   double r_vec[100];
+  double t_vec[100];
+  double z_vec[100];
+
   double t_gg_vec[100];
   double t_qg_vec[100];
   double t_qq_vec[100];
@@ -426,6 +463,10 @@ void FSR::DebugPlots(char* pdf)
   double x_gg_vec[100];
   double x_qg_vec[100];
   double x_qq_vec[100];
+
+  double P_gg_vec[100];
+  double P_qg_vec[100];
+  double P_qq_vec[100];
 
   double intP_gg_vec[100];
   double intP_qg_vec[100];
@@ -435,28 +476,45 @@ void FSR::DebugPlots(char* pdf)
   double ratio_intP_qg_vec[100];
   double ratio_intP_qq_vec[100];
 
+  double delta_gg_vec[100];  
+  double delta_qg_vec[100];  
+  double delta_qq_vec[100];
+
   double intP_gg = IntP_gg(0, 1);
   double intP_qg = IntP_qg(0, 1);
   double intP_qq = IntP_qq(0, 1);
 
+  double x_in(1);
   for(int i=0; i<100; i++){
+    if(i%10 == 0) cout << " loop " << i << endl;
     r_vec[i] = 0.01 + i*0.01;
-    t_gg_vec[i] = GetTFromDelta_gg(1, r_vec[i]);
-    t_qg_vec[i] = GetTFromDelta_qg(1, r_vec[i]);
-    t_qq_vec[i] = GetTFromDelta_qq(1, r_vec[i]);
+    t_vec[i] = m_t0 + i*(t_in - m_t0)/100.;
+    z_vec[i] = 0.01 + i*0.01;
 
-    x_gg_vec[i] = GetXFromP_gg(1, r_vec[i]);
-    x_qg_vec[i] = GetXFromP_qg(1, r_vec[i]);
-    x_qq_vec[i] = GetXFromP_qq(1, r_vec[i]);
+    t_gg_vec[i] = GetTFromDelta_gg(t_in, r_vec[i]);
+    t_qg_vec[i] = GetTFromDelta_qg(t_in, r_vec[i]);
+    t_qq_vec[i] = GetTFromDelta_qq(t_in, r_vec[i]);
 
-    intP_gg_vec[i] = IntP_gg(0, r_vec[i]);
-    intP_qg_vec[i] = IntP_qg(0, r_vec[i]);
-    intP_qq_vec[i] = IntP_qq(0, r_vec[i]);
-     
-     ratio_intP_gg_vec[i] = IntP_gg(0, r_vec[i]) / intP_gg;
-     ratio_intP_qg_vec[i] = IntP_qg(0, r_vec[i]) / intP_qg;
-     ratio_intP_qq_vec[i] = IntP_qq(0, r_vec[i]) / intP_qq;
- }
+    x_gg_vec[i] = GetXFromP_gg(x_in, r_vec[i]);
+    x_qg_vec[i] = GetXFromP_qg(x_in, r_vec[i]);
+    x_qq_vec[i] = GetXFromP_qq(x_in, r_vec[i]);
+
+    P_gg_vec[i] = P_gg(z_vec[i]);
+    P_qg_vec[i] = P_qg(z_vec[i]);
+    P_qq_vec[i] = P_qq(z_vec[i]);
+
+    intP_gg_vec[i] = IntP_gg(0, z_vec[i]);
+    intP_qg_vec[i] = IntP_qg(0, z_vec[i]);
+    intP_qq_vec[i] = IntP_qq(0, z_vec[i]);
+
+    ratio_intP_gg_vec[i] = IntP_gg(0, z_vec[i]) / intP_gg;
+    ratio_intP_qg_vec[i] = IntP_qg(0, z_vec[i]) / intP_qg;
+    ratio_intP_qq_vec[i] = IntP_qq(0, z_vec[i]) / intP_qq;
+
+    delta_gg_vec[i] = Delta_gg(m_t0, t_vec[i]);
+    delta_qg_vec[i] = Delta_qg(m_t0, t_vec[i]);
+    delta_qq_vec[i] = Delta_qq(m_t0, t_vec[i]);
+  }
   TGraph* g_TFromDelta_gg = new TGraph(100,r_vec, t_gg_vec);
   TGraph* g_TFromDelta_qg = new TGraph(100,r_vec, t_qg_vec);
   TGraph* g_TFromDelta_qq = new TGraph(100,r_vec, t_qq_vec);
@@ -465,21 +523,29 @@ void FSR::DebugPlots(char* pdf)
   TGraph* g_XFromP_qg = new TGraph(100,r_vec, x_qg_vec);
   TGraph* g_XFromP_qq = new TGraph(100,r_vec, x_qq_vec);
 
-  TGraph* g_IntP_gg = new TGraph(100,r_vec, intP_gg_vec);
-  TGraph* g_IntP_qg = new TGraph(100,r_vec, intP_qg_vec);
-  TGraph* g_IntP_qq = new TGraph(100,r_vec, intP_qq_vec);
+  TGraph* g_P_gg = new TGraph(100,z_vec, P_gg_vec);
+  TGraph* g_P_qg = new TGraph(100,z_vec, P_qg_vec);
+  TGraph* g_P_qq = new TGraph(100,z_vec, P_qq_vec);
 
-  TGraph* g_ratio_IntP_gg = new TGraph(100,r_vec, ratio_intP_gg_vec);
-  TGraph* g_ratio_IntP_qg = new TGraph(100,r_vec, ratio_intP_qg_vec);
-  TGraph* g_ratio_IntP_qq = new TGraph(100,r_vec, ratio_intP_qq_vec);
+  TGraph* g_IntP_gg = new TGraph(100,z_vec, intP_gg_vec);
+  TGraph* g_IntP_qg = new TGraph(100,z_vec, intP_qg_vec);
+  TGraph* g_IntP_qq = new TGraph(100,z_vec, intP_qq_vec);
+
+  TGraph* g_ratio_IntP_gg = new TGraph(100,z_vec, ratio_intP_gg_vec);
+  TGraph* g_ratio_IntP_qg = new TGraph(100,z_vec, ratio_intP_qg_vec);
+  TGraph* g_ratio_IntP_qq = new TGraph(100,z_vec, ratio_intP_qq_vec);
+
+  TGraph* g_delta_gg = new TGraph(100, t_vec, delta_gg_vec);
+  TGraph* g_delta_qg = new TGraph(100, t_vec, delta_qg_vec);
+  TGraph* g_delta_qq = new TGraph(100, t_vec, delta_qq_vec);
   
-  TCanvas c("c");
-  c.Divide(2,2);
-  c.cd(1)->SetLogy(0);
+  TCanvas c("c_debug");
+  c.Divide(3,2);
+  c.cd(1)->SetLogy(1);
   g_TFromDelta_gg->SetLineColor(2);
   g_TFromDelta_gg->Draw("APC");
-  g_TFromDelta_gg->GetHistogram()->SetTitle("t_out(r|t_in=1);r;t_out");
-  g_TFromDelta_gg->GetHistogram()->GetYaxis()->SetRangeUser(0,1.1);
+  g_TFromDelta_gg->GetHistogram()->SetTitle(Form("t_out(r|t_in=%f);r;t_out", t_in));
+  g_TFromDelta_gg->GetHistogram()->GetYaxis()->SetRangeUser(1e-1,t_in*1.1);
   g_TFromDelta_qg->SetLineColor(2);
   g_TFromDelta_qg->SetLineStyle(2);
   g_TFromDelta_qg->Draw("PC");
@@ -487,13 +553,21 @@ void FSR::DebugPlots(char* pdf)
   c.cd(2)->SetLogy(0);
   g_XFromP_gg->SetLineColor(2);
   g_XFromP_gg->Draw("APC");
-  g_XFromP_gg->GetHistogram()->SetTitle("x_out(r|x_in=1);r;x_out");
-  g_XFromP_gg->GetHistogram()->GetYaxis()->SetRangeUser(0,1.1);
+  g_XFromP_gg->GetHistogram()->SetTitle(Form("x_out(r|x_in=%f);r;x_out", x_in));
+  g_XFromP_gg->GetHistogram()->GetYaxis()->SetRangeUser(0,x_in*1.1);
   g_XFromP_qg->SetLineColor(2);
   g_XFromP_qg->SetLineStyle(2);
   g_XFromP_qg->Draw("PC");
   g_XFromP_qq->Draw("PC");
-  c.cd(3)->SetLogy(1);
+  c.cd(3)->SetLogy(0);
+  g_P_qq->Draw("APC");
+  g_P_qq->GetHistogram()->SetTitle("P_xx(z);z;P_xx(z)");
+  g_P_gg->SetLineColor(2);
+  g_P_gg->Draw("PC");
+  g_P_qg->SetLineColor(2);
+  g_P_qg->SetLineStyle(2);
+  g_P_qg->Draw("PC");
+  c.cd(4)->SetLogy(1);
   g_IntP_gg->SetLineColor(2);
   g_IntP_gg->Draw("APC");
   g_IntP_gg->GetHistogram()->SetTitle("intP_xx(0,z);z;intP_xx(0,z)");
@@ -502,7 +576,7 @@ void FSR::DebugPlots(char* pdf)
   g_IntP_qg->SetLineStyle(2);
   g_IntP_qg->Draw("PC");
   g_IntP_qq->Draw("PC");
-  c.cd(4)->SetLogy(0);
+  c.cd(5)->SetLogy(0);
   g_ratio_IntP_gg->SetLineColor(2);
   g_ratio_IntP_gg->Draw("APC");
   g_ratio_IntP_gg->GetHistogram()->SetTitle("intP_xx(0,z)/intP_xx(0,1);z;intP_xx(0,z)/intP_xx(0,1)");
@@ -511,6 +585,16 @@ void FSR::DebugPlots(char* pdf)
   g_ratio_IntP_qg->SetLineStyle(2);
   g_ratio_IntP_qg->Draw("PC");
   g_ratio_IntP_qq->Draw("PC");
+
+  c.cd(5)->SetLogy(0);
+  g_delta_gg->SetLineColor(2);
+  g_delta_gg->Draw("APC");
+  g_delta_gg->GetHistogram()->SetTitle("Delta_xx(m_t0, t);t;Delta_xx(m_t0, t)");
+  //  g_delta_gg->GetHistogram()->GetYaxis()->SetRangeUser(0,1.1);
+  g_delta_qg->SetLineColor(2);
+  g_delta_qq->SetLineStyle(2);
+  g_delta_qg->Draw("PC");
+  g_delta_qq->Draw("PC");
 
   c.Print(pdf);
 }

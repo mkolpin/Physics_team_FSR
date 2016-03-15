@@ -15,7 +15,7 @@
 #ifndef __FSR_H__
 #define __FSR_H__
 
-#define DEBUG (1)
+#define DEBUG (0)
 #if(DEBUG)
 #define DEBUG_MSG(str) do { std::cout << str << std::endl; } while( false )
 #else
@@ -29,6 +29,7 @@
 #include "TLorentzVector.h"
 #include "TH1.h"
 #include "TGraph.h"
+#include "TH2.h"
 
 using namespace std;
 
@@ -78,7 +79,7 @@ class FSR{
     void MakeJet(Particle p_in, vector< Particle >& jet);
 
     void DrawTXPlot(char* pdf);
-    void DebugPlots(char* pdf);
+    void DebugPlots(char* pdf, double t_in=100);
 
   private:
     // check whether a particle can still radiate (eg t>t0
@@ -110,12 +111,7 @@ class FSR{
 
     TRandom3* m_rand;
 
-    double m_t0;                    // Lower t0 bound, whats a good value, which units do we use (GeV?)
-    double m_alpha_s;               // TODO: how to treat alpha_s, at first set constant?, to which value?;
-    double m_precision;             // precision of integrations etc. so far integrations are extremely primitive.
-    static constexpr double m_integrationCutoff = 1e-2; // static to be accessible by static member functions
     std::vector< Particle > m_debugchain;
-
 
     TH1F* h_t_q;
     TH1F* h_x_q;
@@ -123,7 +119,20 @@ class FSR{
     TH1F* h_x_g;
     TH1F* h_rnd;
     TH1F* h_radMode;
-   
+
+    TH2F* h_xIn_xOut;
+    TH2F* h_tIn_tOut;
+    TH2F* h_xIn_deltaX;
+    TH2F* h_tIn_deltaT;
+
+    double m_t0;                                        // Lower t0 bound, whats a good value, which units do we use (GeV?)
+    static constexpr double m_alpha_s = 1./137.;        // TODO: how to treat alpha_s, at first set constant?, to which value?;
+    static constexpr double m_precision = 1e-2;         // precision of integrations etc. so far integrations are extremely primitive.
+    static constexpr double m_integrationCutoff = 1e-3; // static to be accessible by static member functions
+    static constexpr double plotTMax = 100;
+    static constexpr double plotXMax = 1.1;
+
+
 };
 
 #endif
